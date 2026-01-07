@@ -17,9 +17,58 @@ def process_args(args, defaults, description):
                the required default command line values.
     description - a string to display at the top of the help message.
     """
+
+    """
+argparse è una libreria di Python che serve per leggere gli argomenti da riga di comando (cioè quello che scrivi nel terminale quando lanci un programma).
+
+Quando esegui un comando del tipo:
+
+python script.py --epochs 3 --rom pong
+
+
+il sistema passa a Python una lista di stringhe (internamente è come se fosse):
+
+["--epochs", "3", "--rom", "pong"]
+
+
+Il parser (parser = argparse.ArgumentParser(...)) è l’oggetto che definisce le “regole” per interpretare quella lista. Con parser.add_argument(...) 
+tu dici al parser quali opzioni sono valide (per esempio --epochs o --rom), che tipo devono avere (int, float, str) e qual è il valore di default 
+se non vengono specificate.
+
+La chiamata chiave è:
+
+parameters = parser.parse_args(args)
+
+
+parse_args scorre gli argomenti, riconosce le opzioni definite, converte i valori nel tipo giusto (es. "3" → 3 se type=int), applica i default se mancano, 
+e restituisce un oggetto (parameters) con campi accessibili come parameters.epochs, parameters.rom, ecc.
+
+I trattini (--epochs, -e) sono importanti perché indicano che si tratta di argomenti opzionali (opzioni). Se nel programma non sono stati definiti 
+argomenti “posizionali” (senza trattini), scrivere qualcosa tipo epochs 3 non viene riconosciuto e genera errore. Se invece esegui lo script senza argomenti 
+(ad esempio con “Run file” in VS Code), il parser userà automaticamente tutti i valori di default.
+    """
+
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('-r', '--rom', dest="rom", default=defaults.ROM,
                         help='ROM to run (default: %(default)s)')
+    """
+'-r' e '--rom'
+Questi sono due modi equivalenti per chiamare la stessa opzione.
+--rom = forma lunga
+-r = forma corta
+
+Una ROM (in questo contesto) è il file del gioco che l’emulatore deve caricare.
+Qui la repo usa ALE (Arcade Learning Environment), cioè un ambiente che fa girare giochi Atari 2600 per fare reinforcement learning. 
+ALE non “inventa” il gioco: ha bisogno del file del gioco, cioè la ROM.
+Quindi in pratica:
+--rom pong significa: “allenati sul gioco Pong”
+
+dest="rom"
+dest vuol dire: dove salvo questo valore.
+Cioè: quando il parser legge ciò che hai scritto, deve mettere il risultato in un campo chiamato rom.
+Quindi più avanti tu potrai leggere:
+parameters.rom
+    """
     parser.add_argument('-e', '--epochs', dest="epochs", type=int,
                         default=defaults.EPOCHS,
                         help='Number of training epochs (default: %(default)s)')
