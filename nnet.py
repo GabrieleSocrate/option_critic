@@ -12,9 +12,10 @@ import numpy as np
 class AddBias():
   def __init__(self, init_val=None):
     self.b = init_val if init_val is not None else theano.shared(np.array([0.1], dtype="float32")[0])
+    # se passi init_val usa quello coem bias, altrimenti crea un bias trainabile inizializzato a 0.1
 
   def get_output_for(self, inputs, deterministic=None):
-    return inputs+self.b
+    return inputs+self.b # resituisce input + bias
 
   def get_params(self):
     return [self.b]
@@ -36,20 +37,25 @@ class Model():
     return output
 
   def create_layer(self, inputs, model, dnn_type=True):
+    """
+    Scopo generale: dato il layer precedente (input) e un dizionario che descrive il layer da costruire (conv/mlp, out_size, activation...), 
+    costruisce e ritorna il layer corrispondente 
+    """
     inits = {"zeros": lasagne.init.Constant(0.)}
-    if model["model_type"] == "conv":
+    if model["model_type"] == "conv": # se voglio un layer convoluzionale
       if dnn_type:
         import lasagne.layers.dnn as dnn
       conv_type = dnn.Conv2DDNNLayer if dnn_type else Conv2DLayer#cuda_convnet.Conv2DCCLayer
       poolsize = tuple(model["pool"]) if "pool" in model else (1,1)
       stride = tuple(model["stride"]) if "stride" in model else (1,1)
+      # guarda se ci sono pool e stride altrimenti default
       layer = conv_type(inputs, 
         model["out_size"], 
         filter_size=model["filter_size"], 
         stride=stride, 
         nonlinearity=self.get_activation(model["activation"]),
         W=lasagne.init.GlorotUniform() if "W" not in model else inits[model["W"]],
-        b=lasagne.init.Constant(.1) if "b" not in model else inits[model["b"]])
+        b=lasagne.init.Constant(.1) if "b" not in model else inits[model["b"]]) # così crea il layer
     elif model["model_type"] == "mlp" or model["model_type"] == "logistic":
       layer = lasagne.layers.DenseLayer(inputs,
         num_units=model["out_size"],
@@ -71,6 +77,9 @@ class Model():
              {"model_type": "mlp", "out_size": 300, "activation": "tanh"},
              {"model_type": "classification", "out_size": 10, "activation": "tanh", "loss_type": "log_loss"}]
     """
+    """
+    Scopo generale: questo costruttore prende una descrizione (model) e costruisce una rete layer per layer usando create_layer
+    """
     rng = np.random.RandomState(rng)
     self.theano_rng = RandomStreams(rng.randint(2 ** 30))
     lasagne.random.set_rng(rng) #set rng
@@ -86,15 +95,19 @@ class Model():
     self.layers = []
     for i, m in enumerate(model):
       new_layer = self.create_layer(new_layer, m, dnn_type=dnn_type)
-      self.params += new_layer.get_params()
+      self.params += new_layer.get_params() # prende tutti i parametri trainabili
       self.layers.append(new_layer)
 
   def apply(self, x, deterministic=False):
-    last_layer_inputs = x
+    """
+    Prende un input x e lo fa passare attraverso tutti i layer, in ordine, e restituisce l'output finale
+    """
+    last_layer_inputs = x 
     last_model_type = None
     for i, m in enumerate(self.model):
       if m["model_type"] in ["mlp", "logistic"] and last_layer_inputs.ndim > 2:
         last_layer_inputs = last_layer_inputs.flatten(2)
+        # se stai per entrare in un layer fully connected e l'input è ancora multi-dimensionale allora fai flatten per trasformarlo in batch x features
       last_layer_inputs = self.layers[i].get_output_for(last_layer_inputs, deterministic=deterministic)
       last_model_type = m["model_type"]
     return last_layer_inputs

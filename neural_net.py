@@ -230,13 +230,29 @@ class OptionCritic_Network():
     In una frase: term_grad è il pezzo che allena β(s,o) a cambiare opzione quando l’opzione corrente non è conveniente.
     """
     entropy = -T.sum(action_probs*T.log(action_probs)) # calcola l’entropia della policy sulle azioni π(a|s,o).
+    # in generale, entropia alta significa più esplorazione (più random), entropia bassa allora policy più deterministica
     if not BASELINE:
       policy_grad = -T.sum(T.log(action_probs[T.arange(a.shape[0]), a]) * y) - entropy_reg*entropy
+      """
+      action_probs[range, a] prende, per ogni elemento del batch, la probabilità dell’azione realmente eseguita.
+      log(...) è la log-probabilità: è la forma standard del policy gradient.
+      Moltiplicano per y: qui y è usato come “peso” del gradiente (un segnale tipo return/target).
+      - entropy_reg * entropy aggiunge il bonus entropia (più entropia ⇒ più esplorazione).
+      """
     else:
       policy_grad = -T.sum(T.log(action_probs[T.arange(a.shape[0]), a]) * (y-disc_Q)) - entropy_reg*entropy
+      """
+      invece di usare y, usa (y - disc_Q) come “segnale”.
+      disc_Q è una baseline (Q(s,o) staccato dal gradiente): serve a rendere l’update meno rumoroso.
+      """
     grads = T.grad(term_grad+policy_grad, actor_params)
     actor_updates = learning_algo.apply(actor_params, grads, grad_clip=grad_clip)
-
+    """
+    term_grad (che hai già visto) aggiorna β(s,o) (termination)
+    policy_grad aggiorna π(a|s,o) (policy)
+    T.grad(...) calcola i gradienti rispetto a actor_params (termination_model + options_model)
+    apply(...) costruisce le “regole di update” (qui SGD con actor_lr) + eventuale clipping.
+    """
     if self.freeze_interval > 1:
       target_updates = OrderedDict()
       for t, b in zip(self.Q_model_prime.params+self.state_model_prime.params,
@@ -266,14 +282,23 @@ class OptionCritic_Network():
     print "complete"
 
   def update_target_params(self):
+    """
+    Scopo generale: aggiornare la target network copiando i pesi della rete online dentro la rete prime, solo se freeze_interval > 1
+    """
     if self.freeze_interval > 1:
       self._update_target_params()
     return
 
   def predict_move(self, s):
+    """
+    Scopo generale: scegliere l'opzione migliore (greedy) dato lo stato s
+    """
     return self.sample_options(s)
 
   def predict_termination(self, s, a):
+    """
+    Scopo generale: dato lo stato s e l'opzione corrente decide se terminare e qual è l'opzione migliore suggerita
+    """
     self.a_shared.set_value(a)
     return tuple(self.sample_termination(s))
 
@@ -282,10 +307,16 @@ class OptionCritic_Network():
     return self.pred_score()[:,np.newaxis]
 
   def get_state(self, x):
+    """
+    Scopo generale: trasformare le immagini x in feature s usando l'encoder CNN
+    """
     self.x_shared.set_value(x)
     return self.get_s()
 
   def get_action(self, s, o):
+    """
+    Scopo generale: dato uno stato s e una opzione o, campionare un'azione dalla policy intra-opzione 
+    """
     self.o_shared.set_value(o)
     return self.sample_actions(s)
 
@@ -294,6 +325,7 @@ class OptionCritic_Network():
     self.o_shared.set_value(options)
     self.r_shared.set_value(r)
     self.terminal_shared.set_value(terminal)
+    # abbiamo messo in memoria i batch comuni sia a actor che critic ovvero next state, opzioni, reward e done 
     if model == "critic":
         self.x_shared.set_value(train_set_x)
         return self.train_critic()
